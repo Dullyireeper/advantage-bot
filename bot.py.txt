@@ -1,0 +1,493 @@
+import logging
+import asyncio
+from datetime import datetime, timedelta
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from config import Config
+from database import init_db, User, Ad, AdView, SocialProfile, SocialTask, SocialTaskCompletion, PremiumOrder, Deposit, Withdrawal, BalanceHistory, DailyStreak, Achievement
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+class AdVantageBot:
+    def __init__(self):
+        self.config = Config
+        self.db = init_db()
+        self.application = None
+    
+    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            user = update.effective_user
+            db_user = self.db.query(User).filter_by(telegram_id=user.id).first()
+            
+            if not db_user:
+                new_user = User(
+                    telegram_id=user.id,
+                    username=user.username,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    join_date=datetime.utcnow()
+                )
+                self.db.add(new_user)
+                streak = DailyStreak(user_id=user.id)
+                self.db.add(streak)
+                
+                if context.args and context.args[0].isdigit():
+                    referrer_id = int(context.args[0])
+                    if referrer_id != user.id:
+                        referrer = self.db.query(User).filter_by(telegram_id=referrer_id).first()
+                        if referrer:
+                            referrer.balance += self.config.REFERRAL_BONUS
+                            referrer.total_earned += self.config.REFERRAL_BONUS
+                            new_user.referred_by = referrer_id
+                self.db.commit()
+            
+            await self.show_main_menu(update, context)
+        except Exception as e:
+            logger.error(f"Error in start_command: {e}")
+    
+    async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            user = self.db.query(User).filter_by(telegram_id=update.effective_user.id).first()
+            streak = self.db.query(DailyStreak).filter_by(user_id=user.telegram_id).first()
+            streak_text = f"🔥 {streak.streak_days} day streak!" if streak and streak.streak_days > 0 else ""
+            
+            keyboard = [
+                [InlineKeyboardButton("📺 Watch Ads", callback_data='watch_ads')],
+                [InlineKeyboardButton("📋 Daily Tasks", callback_data='daily_tasks')],
+                [InlineKeyboardButton("🎮 Mini Games", callback_data='mini_games')],
+                [InlineKeyboardButton("💎 Premium Growth", callback_data='premium_menu')],
+                [InlineKeyboardButton("📱 Free Social Growth", callback_data='social_menu')],
+                [InlineKeyboardButton("👥 Referral Program", callback_data='referral')],
+                [InlineKeyboardButton("💳 Payments", callback_data='payment_menu')],
+                [InlineKeyboardButton("👤 My Profile", callback_data='profile')],
+            ]
+            
+            if user and user.is_admin:
+                keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data='admin_panel')])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            welcome_text = f"""
+🎯 **KARIBU ADVANTAGE KENYA!** 🎯
+*Pata Pesa na Kukuza Social Media Yako!*
+
+💵 Salio: **${user.balance:.2f}**
+👥 Jumla: **${user.total_earned:.2f}**
+{streak_text}
+
+Chagua njia yako! 🚀
+            """
+            
+            await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Error in show_main_menu: {e}")
+    
+    async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            query = update.callback_query
+            await query.answer()
+            data = query.data
+            user_id = update.effective_user.id
+            user = self.db.query(User).filter_by(telegram_id=user_id).first()
+            
+            if data == 'profile':
+                await self.show_profile(query, user)
+            elif data == 'watch_ads':
+                await self.show_ads(query, user)
+            elif data == 'daily_tasks':
+                await self.show_tasks(query, user)
+            elif data == 'mini_games':
+                await self.show_games(query, user)
+            elif data == 'premium_menu':
+                await self.show_premium(query, user)
+            elif data == 'social_menu':
+                await self.show_social_menu(query, user)
+            elif data == 'payment_menu':
+                await self.show_payment_menu(query, user)
+            elif data == 'referral':
+                await self.show_referral(query, user)
+            elif data == 'back_to_menu':
+                await self.show_main_menu_callback(query, user)
+            elif data == 'admin_panel':
+                await self.show_admin_panel(query, user)
+            elif data.startswith('ad_watched_'):
+                ad_id = data.split('_')[2]
+                await self.ad_watched(query, user, ad_id)
+            else:
+                await query.edit_message_text("❌ Feature coming soon!")
+        except Exception as e:
+            logger.error(f"Error in handle_callback: {e}")
+    
+    async def show_profile(self, query, user):
+        try:
+            streak = self.db.query(DailyStreak).filter_by(user_id=user.telegram_id).first()
+            text = f"""
+👤 **PROFILE YAKO**
+
+📱 @{user.username or 'N/A'}
+📛 {user.first_name} {user.last_name or ''}
+📅 {user.join_date.strftime('%Y-%m-%d')}
+
+💰 Salio: **${user.balance:.2f}**
+💵 Jumla: **${user.total_earned:.2f}**
+🏦 Withdrawn: **${user.total_withdrawn:.2f}**
+🔥 Streak: {streak.streak_days if streak else 0} days
+            """
+            keyboard = [[InlineKeyboardButton("🔙 Nyuma", callback_data='back_to_menu')]]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Error in show_profile: {e}")
+    
+    async def show_ads(self, query, user):
+        try:
+            ads = self.db.query(Ad).filter_by(is_active=True).all()
+            if not ads:
+                await query.edit_message_text("❌ No ads available! Check back later.")
+                return
+            
+            today = datetime.utcnow().replace(hour=0, minute=0, second=0)
+            daily_views = self.db.query(AdView).filter(
+                AdView.user_id == user.telegram_id,
+                AdView.viewed_at >= today
+            ).count()
+            
+            if daily_views >= self.config.MAX_ADS_PER_DAY:
+                await query.edit_message_text(f"⚠️ You've watched {self.config.MAX_ADS_PER_DAY} ads today!\nCome back tomorrow.")
+                return
+            
+            import random
+            ad = random.choice(ads)
+            remaining = self.config.MAX_ADS_PER_DAY - daily_views
+            
+            text = f"""
+📺 **Watch Ad** ({remaining} remaining)
+
+{ad.title}
+{ad.description}
+
+💰 Reward: **${ad.user_reward:.3f}**
+👀 Views: {ad.total_views}/{ad.max_views}
+
+[View Ad]({ad.link_url})
+            """
+            keyboard = [
+                [InlineKeyboardButton("✅ I've Watched It", callback_data=f'ad_watched_{ad.id}')],
+                [InlineKeyboardButton("🔙 Back", callback_data='back_to_menu')]
+            ]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Error in show_ads: {e}")
+    
+    async def ad_watched(self, query, user, ad_id):
+        try:
+            ad = self.db.query(Ad).filter_by(id=int(ad_id)).first()
+            if not ad:
+                await query.edit_message_text("❌ Ad not found!")
+                return
+            
+            today = datetime.utcnow().replace(hour=0, minute=0, second=0)
+            daily_views = self.db.query(AdView).filter(
+                AdView.user_id == user.telegram_id,
+                AdView.viewed_at >= today
+            ).count()
+            
+            if daily_views >= self.config.MAX_ADS_PER_DAY:
+                await query.edit_message_text("⚠️ Daily limit reached!")
+                return
+            
+            ad_view = AdView(
+                user_id=user.telegram_id,
+                ad_id=ad.id,
+                viewed_at=datetime.utcnow(),
+                user_reward=ad.user_reward,
+                owner_revenue=ad.cost_per_view
+            )
+            self.db.add(ad_view)
+            ad.total_views += 1
+            if ad.total_views >= ad.max_views:
+                ad.is_active = False
+            
+            user.balance += ad.user_reward
+            user.total_earned += ad.user_reward
+            self.db.commit()
+            
+            await query.edit_message_text(
+                f"✅ **Ad Watched!**\n\n💰 You earned: ${ad.user_reward:.3f}\n💵 New Balance: ${user.balance:.2f}",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📺 Watch More", callback_data='watch_ads')],
+                    [InlineKeyboardButton("🔙 Back", callback_data='back_to_menu')]
+                ]),
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Error in ad_watched: {e}")
+    
+    async def show_social_menu(self, query, user):
+        try:
+            profile = self.db.query(SocialProfile).filter_by(user_id=user.telegram_id).first()
+            if not profile:
+                profile = SocialProfile(
+                    user_id=user.telegram_id,
+                    username=user.username or f"user_{user.telegram_id}"
+                )
+                self.db.add(profile)
+                self.db.commit()
+            
+            text = f"""
+📱 **SOCIAL GROWTH ZONE**
+
+👤 @{profile.username}
+⭐ Points: **{profile.points}**
+👥 Followers Gained: {profile.followers_gained}
+
+📈 Complete tasks → Earn points → Get followers!
+💰 100 points = 10 followers
+            """
+            keyboard = [
+                [InlineKeyboardButton("📋 Tasks", callback_data='social_tasks')],
+                [InlineKeyboardButton("🔙 Back", callback_data='back_to_menu')]
+            ]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Error in show_social_menu: {e}")
+    
+    async def show_premium(self, query, user):
+        try:
+            text = """
+💎 **PREMIUM GROWTH**
+
+**TikTok:**
+• 50 followers - $0.50
+• 100 followers - $1.00
+• 500 followers - $4.00
+
+**Instagram:**
+• 50 followers - $0.75
+• 100 followers - $1.50
+• 500 followers - $6.00
+
+**YouTube:**
+• 10 subs - $0.50
+• 50 subs - $2.00
+• 100 subs - $3.50
+
+💰 Payments: M-Pesa, Visa, Crypto
+            """
+            keyboard = [[InlineKeyboardButton("🔙 Back", callback_data='back_to_menu')]]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Error in show_premium: {e}")
+    
+    async def show_payment_menu(self, query, user):
+        try:
+            text = f"""
+💳 **PAYMENT CENTER**
+
+💰 Balance: **${user.balance:.2f}**
+
+📱 **M-Pesa:** Paybill 123456, Account {user.telegram_id}
+🪙 **Crypto:** Coming soon
+💳 **Visa/Mastercard:** Coming soon
+
+Type: `deposit [amount]` to deposit
+Type: `withdraw [amount] [phone]` to withdraw
+            """
+            keyboard = [[InlineKeyboardButton("🔙 Back", callback_data='back_to_menu')]]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Error in show_payment_menu: {e}")
+    
+    async def show_referral(self, query, user):
+        try:
+            referral_link = f"https://t.me/AdVantageKeBot?start={user.telegram_id}"
+            referrals = self.db.query(User).filter_by(referred_by=user.telegram_id).count()
+            text = f"""
+👥 **REFERRAL PROGRAM**
+
+💰 Earn $0.25 per referral!
+📊 Referrals: {referrals}
+🔗 Link: `{referral_link}`
+            """
+            keyboard = [[InlineKeyboardButton("🔙 Back", callback_data='back_to_menu')]]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Error in show_referral: {e}")
+    
+    async def show_admin_panel(self, query, user):
+        try:
+            if not user or not user.is_admin:
+                await query.edit_message_text("❌ Unauthorized!")
+                return
+            
+            total_users = self.db.query(User).count()
+            text = f"""
+⚙️ **ADMIN PANEL**
+
+📊 Users: {total_users}
+🤖 Bot: @AdVantageKeBot
+📦 Version: {self.config.VERSION}
+            """
+            keyboard = [[InlineKeyboardButton("🔙 Back", callback_data='back_to_menu')]]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Error in show_admin_panel: {e}")
+    
+    async def show_main_menu_callback(self, query, user):
+        try:
+            streak = self.db.query(DailyStreak).filter_by(user_id=user.telegram_id).first()
+            streak_text = f"🔥 {streak.streak_days} day streak!" if streak and streak.streak_days > 0 else ""
+            
+            keyboard = [
+                [InlineKeyboardButton("📺 Watch Ads", callback_data='watch_ads')],
+                [InlineKeyboardButton("📋 Daily Tasks", callback_data='daily_tasks')],
+                [InlineKeyboardButton("🎮 Mini Games", callback_data='mini_games')],
+                [InlineKeyboardButton("💎 Premium Growth", callback_data='premium_menu')],
+                [InlineKeyboardButton("📱 Free Social Growth", callback_data='social_menu')],
+                [InlineKeyboardButton("👥 Referral Program", callback_data='referral')],
+                [InlineKeyboardButton("💳 Payments", callback_data='payment_menu')],
+                [InlineKeyboardButton("👤 My Profile", callback_data='profile')],
+            ]
+            
+            if user and user.is_admin:
+                keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data='admin_panel')])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            welcome_text = f"""
+🎯 **KARIBU ADVANTAGE KENYA!** 🎯
+*Pata Pesa na Kukuza Social Media Yako!*
+
+💵 Salio: **${user.balance:.2f}**
+👥 Jumla: **${user.total_earned:.2f}**
+{streak_text}
+
+Chagua njia yako! 🚀
+            """
+            
+            await query.edit_message_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Error in show_main_menu_callback: {e}")
+    
+    async def show_tasks(self, query, user):
+        try:
+            text = """
+📋 **DAILY TASKS**
+
+Coming soon! Complete tasks to earn money.
+💡 Check back later!
+            """
+            keyboard = [[InlineKeyboardButton("🔙 Back", callback_data='back_to_menu')]]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Error in show_tasks: {e}")
+    
+    async def show_games(self, query, user):
+        try:
+            text = """
+🎮 **MINI GAMES**
+
+Coming soon! Play games and earn money.
+💡 Check back later!
+            """
+            keyboard = [[InlineKeyboardButton("🔙 Back", callback_data='back_to_menu')]]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Error in show_games: {e}")
+    
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            user_id = update.effective_user.id
+            text = update.message.text
+            
+            if text.lower().startswith('deposit'):
+                parts = text.split()
+                if len(parts) >= 2:
+                    try:
+                        amount = float(parts[1])
+                        user = self.db.query(User).filter_by(telegram_id=user_id).first()
+                        import uuid
+                        deposit = Deposit(
+                            user_id=user_id,
+                            amount=amount,
+                            method='mpesa',
+                            transaction_id=f'DEP-{uuid.uuid4().hex[:8]}',
+                            status='pending',
+                            requested_at=datetime.utcnow()
+                        )
+                        self.db.add(deposit)
+                        self.db.commit()
+                        await update.message.reply_text(f"✅ Deposit of ${amount:.2f} recorded! Pending confirmation.")
+                        return
+                    except ValueError:
+                        await update.message.reply_text("❌ Invalid amount!")
+                        return
+            
+            if text.lower().startswith('withdraw'):
+                parts = text.split()
+                if len(parts) >= 3:
+                    try:
+                        amount = float(parts[1])
+                        account = ' '.join(parts[2:])
+                        user = self.db.query(User).filter_by(telegram_id=user_id).first()
+                        
+                        if amount < self.config.MIN_WITHDRAWAL:
+                            await update.message.reply_text(f"❌ Min withdrawal is ${self.config.MIN_WITHDRAWAL:.2f}")
+                            return
+                        if amount > user.balance:
+                            await update.message.reply_text(f"❌ Insufficient balance! You have ${user.balance:.2f}")
+                            return
+                        
+                        import uuid
+                        withdrawal = Withdrawal(
+                            user_id=user_id,
+                            amount=amount,
+                            method='mpesa',
+                            account_details=account,
+                            transaction_id=f'WTH-{uuid.uuid4().hex[:8]}',
+                            status='pending',
+                            requested_at=datetime.utcnow()
+                        )
+                        self.db.add(withdrawal)
+                        user.balance -= amount
+                        self.db.commit()
+                        await update.message.reply_text(f"✅ Withdrawal of ${amount:.2f} requested! Processing soon.")
+                        return
+                    except ValueError:
+                        await update.message.reply_text("❌ Invalid amount!")
+                        return
+            
+            await update.message.reply_text(
+                "❓ I don't understand that.\n\n"
+                "📱 **Available Commands:**\n"
+                "/start - Main menu\n"
+                "deposit [amount] - Deposit money\n"
+                "withdraw [amount] [phone] - Withdraw money\n\n"
+                "Or use the buttons below! 🔘"
+            )
+        except Exception as e:
+            logger.error(f"Error in handle_message: {e}")
+    
+    def run(self):
+        try:
+            self.application = Application.builder().token(self.config.BOT_TOKEN).build()
+            
+            self.application.add_handler(CommandHandler("start", self.start_command))
+            self.application.add_handler(CallbackQueryHandler(self.handle_callback))
+            self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+            
+            logger.info(f"🚀 AdVantage Kenya Bot v{self.config.VERSION} is running...")
+            self.application.run_polling()
+        except Exception as e:
+            logger.error(f"Failed to start bot: {e}")
+            raise
+
+if __name__ == '__main__':
+    try:
+        bot = AdVantageBot()
+        bot.run()
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")

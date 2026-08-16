@@ -1,0 +1,46 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class Config:
+    # ========== YOUR BOT TOKEN (From BotFather) ==========
+    BOT_TOKEN = "8643664640:AAFiDlB2ijnKWCu6spags8eK5zMDhPZ3J2s"
+    
+    # ========== YOUR USER ID (From @userinfobot) ==========
+    ADMIN_IDS = [6072649958]
+    
+    # ========== DATABASE ==========
+    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///bot.db')
+    
+    # ========== CURRENCY ==========
+    EXCHANGE_RATE = 125.00
+    
+    # ========== AD REVENUE ==========
+    AD_REVENUE_PER_VIEW = 0.008
+    USER_REWARD_PER_VIEW = 0.002
+    
+    # ========== FREE GROWTH ==========
+    POINTS_PER_FOLLOW = 10
+    POINTS_PER_TASK = 50
+    FOLLOWERS_PER_100_POINTS = 10
+    
+    # ========== REFERRAL ==========
+    REFERRAL_BONUS = 0.25
+    REFERRAL_PERCENTAGE = 0.10
+    
+    # ========== WITHDRAWAL ==========
+    MIN_WITHDRAWAL = 5.00
+    MAX_WITHDRAWAL_DAILY = 20.00
+    
+    # ========== DAILY LIMITS ==========
+    MAX_ADS_PER_DAY = 5
+    MAX_TASKS_PER_DAY = 10
+    MAX_GAMES_PER_DAY = 5
+    
+    # ========== M-PESA ==========
+    MPESA_PAYBILL = "123456"
+    MPESA_ACCOUNT = ""
+    
+    # ========== VERSION ==========
+    VERSION = '2.0.0'
