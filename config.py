@@ -29,10 +29,20 @@ class Config:
     VERSION = "3.0.0"
 
     @classmethod
-    def validate(cls):
-        if not cls.BOT_TOKEN:
-            raise RuntimeError("BOT_TOKEN is missing. Add it to Railway Variables.")
-        if not cls.ADMIN_IDS:
-            raise RuntimeError("ADMIN_IDS is missing. Example: ADMIN_IDS=123456789")
-        if cls.USER_REWARD_PER_VIEW < 0 or cls.AD_REVENUE_PER_VIEW < cls.USER_REWARD_PER_VIEW:
-            raise RuntimeError("Invalid ad reward configuration.")
+def validate(cls):
+    if not cls.BOT_TOKEN:
+        raise RuntimeError("BOT_TOKEN is missing.")
+    
+    if not cls.ADMIN_IDS:
+        raise RuntimeError("At least one admin ID is required.")
+    
+    if cls.USER_REWARD_PER_VIEW < 0:
+        raise RuntimeError("USER_REWARD_PER_VIEW cannot be negative.")
+    
+    if cls.AD_REVENUE_PER_VIEW < cls.USER_REWARD_PER_VIEW:
+        raise RuntimeError(
+            "AD_REVENUE_PER_VIEW must be greater than or equal to "
+            "USER_REWARD_PER_VIEW."
+        )
+    
+    return True
