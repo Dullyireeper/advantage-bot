@@ -1,0 +1,6 @@
+[build]
+  python_version = "3.11"
+
+[run]
+  command = "python bot.py"
+  process_type = "worker"
