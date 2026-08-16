@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    BOT_TOKEN = os.getenv("8643664640:AAFiDlB2ijnKWCu6spags8eK5zMDhPZ3J2s", "")
+    BOT_TOKEN = "8643664640:AAFiDlB2ijnKWCu6spags8eK5zMDhPZ3J2s"
     ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
     BOT_USERNAME = os.getenv("BOT_USERNAME", "AdVantageKeBot")
 
