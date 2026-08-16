@@ -5,7 +5,7 @@ load_dotenv()
 
 class Config:
     BOT_TOKEN = "8643664640:AAFiDlB2ijnKWCu6spags8eK5zMDhPZ3J2s"
-    ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
+    ADMIN_IDS = [6072649958]
     BOT_USERNAME = os.getenv("BOT_USERNAME", "AdVantageKeBot")
 
     # Railway/Postgres: set DATABASE_URL in Railway. SQLite is a local fallback.
