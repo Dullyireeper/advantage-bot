@@ -108,7 +108,7 @@ class AdVantageBot:
         finally:
             db.close()
 
-    async def show_main_menu(self, update_or_query, user):
+        async def show_main_menu(self, update_or_query, user):
         keyboard = [
             [InlineKeyboardButton("📺 Watch Ads", callback_data="watch_ads"),
              InlineKeyboardButton("📋 Daily Tasks", callback_data="daily_tasks")],
@@ -119,31 +119,45 @@ class AdVantageBot:
             [InlineKeyboardButton("💳 Payments", callback_data="payment_menu"),
              InlineKeyboardButton("👤 My Profile", callback_data="profile")],
         ]
-        if user and user.is_admin:
-            keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_panel")])
 
-       text = (
-    "🎯 <b>WELCOME TO ADVANTAGE</b> 🎯\n\n"
-    "<b>Turn your time into opportunities. 🚀</b>\n\n"
-    "Advantage is a digital rewards and growth platform where you can "
-    "complete tasks, discover opportunities, earn rewards, grow your "
-    "social presence, and benefit from our referral program.\n\n"
-    "💰 <b>Earn Rewards</b>\n"
-    "📋 <b>Complete Tasks</b>\n"
-    "📱 <b>Social Growth</b>\n"
-    "👥 <b>Refer & Earn</b>\n"
-    "💎 <b>Premium Growth</b>\n"
-    "🏆 <b>Track Your Progress</b>\n\n"
-    "🌍 <b>Built for everyone. Growing globally.</b>\n\n"
-    "Choose a service below to get started! 🚀"
-).format(money(user.balance), money(user.total_earned))
+        if user and self.is_admin(user.telegram_id):
+            keyboard.append([
+                InlineKeyboardButton(
+                    "⚙️ Admin Panel",
+                    callback_data="admin_panel"
+                )
+            ])
+
+        text = (
+            "🎯 <b>WELCOME TO ADVANTAGE</b> 🎯\n\n"
+            "<b>Turn your time into opportunities. 🚀</b>\n\n"
+            "Advantage is a digital rewards and growth platform where you can "
+            "complete tasks, discover opportunities, earn rewards, grow your "
+            "social presence, and benefit from our referral program.\n\n"
+            "💰 <b>Earn Rewards</b>\n"
+            "📋 <b>Complete Tasks</b>\n"
+            "📱 <b>Social Growth</b>\n"
+            "👥 <b>Refer & Earn</b>\n"
+            "💎 <b>Premium Growth</b>\n"
+            "🏆 <b>Track Your Progress</b>\n\n"
+            "🌍 <b>Built for everyone. Growing globally.</b>\n\n"
+            "Choose a service below to get started! 🚀"
+        )
 
         markup = InlineKeyboardMarkup(keyboard)
-        if hasattr(update_or_query, "message") and update_or_query.message:
-            await update_or_query.message.reply_text(text, reply_markup=markup, parse_mode=ParseMode.HTML)
-        else:
-            await update_or_query.edit_message_text(text, reply_markup=markup, parse_mode=ParseMode.HTML)
 
+        if hasattr(update_or_query, "message") and update_or_query.message:
+            await update_or_query.message.reply_text(
+                text,
+                reply_markup=markup,
+                parse_mode=ParseMode.HTML
+            )
+        else:
+            await update_or_query.edit_message_text(
+                text,
+                reply_markup=markup,
+                parse_mode=ParseMode.HTML
+            )
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         await query.answer()
