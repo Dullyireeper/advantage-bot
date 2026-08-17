@@ -122,12 +122,21 @@ class AdVantageBot:
         if user and user.is_admin:
             keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="admin_panel")])
 
-        text = (
-            "🎯 <b>KARIBU ADVANTAGE KENYA!</b> 🎯\n\n"
-            "💵 Balance: <b>{}</b>\n"
-            "💰 Total earned: <b>{}</b>\n\n"
-            "Choose a service below 👇"
-        ).format(money(user.balance), money(user.total_earned))
+       text = (
+    "🎯 <b>WELCOME TO ADVANTAGE</b> 🎯\n\n"
+    "<b>Turn your time into opportunities. 🚀</b>\n\n"
+    "Advantage is a digital rewards and growth platform where you can "
+    "complete tasks, discover opportunities, earn rewards, grow your "
+    "social presence, and benefit from our referral program.\n\n"
+    "💰 <b>Earn Rewards</b>\n"
+    "📋 <b>Complete Tasks</b>\n"
+    "📱 <b>Social Growth</b>\n"
+    "👥 <b>Refer & Earn</b>\n"
+    "💎 <b>Premium Growth</b>\n"
+    "🏆 <b>Track Your Progress</b>\n\n"
+    "🌍 <b>Built for everyone. Growing globally.</b>\n\n"
+    "Choose a service below to get started! 🚀"
+).format(money(user.balance), money(user.total_earned))
 
         markup = InlineKeyboardMarkup(keyboard)
         if hasattr(update_or_query, "message") and update_or_query.message:
