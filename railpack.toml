@@ -1,0 +1,3 @@
+[deploy]
+command = "python bot.py"
+port = -1
